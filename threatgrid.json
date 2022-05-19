@@ -4,13 +4,13 @@
     "description": "This app supports executing investigative actions to analyze executables and URLs on the Threat Grid sandbox",
     "type": "sandbox",
     "main_module": "threatgrid_connector.py",
-    "app_version": "2.2.10",
+    "app_version": "2.3.0",
     "utctime_updated": "2022-01-21T07:54:56.000000Z",
     "package_name": "phantom_threatgrid",
     "product_vendor": "Threat Grid",
     "product_name": "Threat Grid",
     "product_version_regex": ".*",
-    "min_phantom_version": "5.0.0",
+    "min_phantom_version": "5.2.0",
     "python_version": "3",
     "fips_compliant": true,
     "latest_tested_versions": [
@@ -69,7 +69,7 @@
             "description": "Run the file in the Threat Grid sandbox and retrieve the analysis results",
             "verbose": "This action requires the input file to be present in the vault and therefore takes the vault id as the input parameter.",
             "type": "generic",
-            "identifier": "detonate file",
+            "identifier": "detonate_file",
             "read_only": false,
             "lock": {
                 "enabled": false
@@ -101,15 +101,10 @@
                     "description": "VM image to run on",
                     "data_type": "string",
                     "order": 2,
-                    "value_list": [
-                        "winxp",
-                        "win7",
-                        "win7-x64",
-                        "win7-x64-2",
-                        "win7-x64-jp",
-                        "win7-x64-kr",
-                        "win10"
-                    ]
+                    "contains": [
+                        "threatgrid vm name"
+                    ],
+                    "primary": true
                 },
                 "force_analysis": {
                     "description": "Force re-run of sample",
@@ -138,6 +133,16 @@
                     "contains": [
                         "password"
                     ]
+                },
+                "tags": {
+                    "description": "A comma-separated list of tags applied to this sample",
+                    "data_type": "string",
+                    "order": 7
+                },
+                "vm_runtime": {
+                    "description": "The number of minutes the sample should be analyzed for (Must be set to either 2 or 5)",
+                    "data_type": "string",
+                    "order": 8
                 }
             },
             "output": [
@@ -157,13 +162,6 @@
                     ],
                     "example_values": [
                         "Test_ThreatGrid_1.exe"
-                    ]
-                },
-                {
-                    "data_path": "action_result.parameter.sample_password",
-                    "data_type": "string",
-                    "contains": [
-                        "password"
                     ]
                 },
                 {
@@ -194,6 +192,23 @@
                     ]
                 },
                 {
+                    "data_path": "action_result.parameter.sample_password",
+                    "data_type": "string",
+                    "contains": [
+                        "password"
+                    ],
+                    "example_values": [
+                        "T3stP@$$"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.tags",
+                    "data_type": "string",
+                    "example_values": [
+                        "test-tag1, test-tag2"
+                    ]
+                },
+                {
                     "data_path": "action_result.parameter.vault_id",
                     "data_type": "string",
                     "contains": [
@@ -210,7 +225,18 @@
                     "data_path": "action_result.parameter.vm",
                     "data_type": "string",
                     "example_values": [
-                        "win7"
+                        "win10-x64-browser"
+                    ],
+                    "contains": [
+                        "threatgrid vm name"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.vm_runtime",
+                    "data_type": "string",
+                    "example_values": [
+                        "2",
+                        "5"
                     ]
                 },
                 {
@@ -2218,7 +2244,7 @@
             "action": "get report",
             "description": "Query for results of an already completed task in Threat Grid",
             "type": "investigate",
-            "identifier": "get report",
+            "identifier": "get_report",
             "read_only": true,
             "lock": {
                 "enabled": false
@@ -4366,7 +4392,7 @@
             "action": "detonate url",
             "description": "Load a URL in the Threat Grid sandbox and retrieve the analysis results",
             "type": "generic",
-            "identifier": "detonate url",
+            "identifier": "detonate_url",
             "read_only": false,
             "lock": {
                 "enabled": false
@@ -4391,6 +4417,30 @@
                         "threatgrid playbook name"
                     ],
                     "primary": true
+                },
+                "vm": {
+                    "description": "VM image to run on",
+                    "data_type": "string",
+                    "order": 2,
+                    "contains": [
+                        "threatgrid vm name"
+                    ],
+                    "primary": true
+                },
+                "private": {
+                    "description": "Mark URL and results private",
+                    "data_type": "boolean",
+                    "order": 3
+                },
+                "tags": {
+                    "description": "A comma-separated list of tags applied to this sample",
+                    "data_type": "string",
+                    "order": 4
+                },
+                "vm_runtime": {
+                    "description": "The number of minutes the sample should be analyzed for (Must be set to either 2 or 5)",
+                    "data_type": "string",
+                    "order": 5
                 }
             },
             "output": [
@@ -4414,6 +4464,21 @@
                     ]
                 },
                 {
+                    "data_path": "action_result.parameter.private",
+                    "data_type": "boolean",
+                    "example_values": [
+                        true,
+                        false
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.tags",
+                    "data_type": "string",
+                    "example_values": [
+                        "test-tag1, test-tag2"
+                    ]
+                },
+                {
                     "data_path": "action_result.parameter.url",
                     "data_type": "string",
                     "contains": [
@@ -4422,6 +4487,24 @@
                     ],
                     "example_values": [
                         "test.com"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.vm",
+                    "data_type": "string",
+                    "example_values": [
+                        "win10-x64-browser"
+                    ],
+                    "contains": [
+                        "threatgrid vm name"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.vm_runtime",
+                    "data_type": "string",
+                    "example_values": [
+                        "2",
+                        "5"
                     ]
                 },
                 {
@@ -6528,10 +6611,103 @@
             "versions": "EQ(*)"
         },
         {
+            "action": "list vms",
+            "description": "List the VMs available in the connected ThreatGrid environment",
+            "type": "investigate",
+            "identifier": "list_vms",
+            "read_only": true,
+            "lock": {
+                "enabled": false
+            },
+            "parameters": {},
+            "output": [
+                {
+                    "data_path": "action_result.status",
+                    "data_type": "string",
+                    "example_values": [
+                        "success",
+                        "failed"
+                    ]
+                },
+                {
+                    "data_path": "action_result.data.*.display-name",
+                    "data_type": "string",
+                    "example_values": [
+                        "Windows 7 64-bit"
+                    ],
+                    "column_name": "VM Name",
+                    "column_order": 0
+                },
+                {
+                    "data_path": "action_result.data.*.software",
+                    "data_type": "string",
+                    "example_values": [
+                        "Adobe Reader XI  MUI"
+                    ]
+                },
+                {
+                    "data_path": "action_result.data.*.ui-only",
+                    "data_type": "boolean",
+                    "example_values": [
+                        true,
+                        false
+                    ],
+                    "column_name": "UI Only",
+                    "column_order": 2
+                },
+                {
+                    "data_path": "action_result.data.*.vm",
+                    "data_type": "string",
+                    "example_values": [
+                        "win7-x64"
+                    ],
+                    "contains": [
+                        "threatgrid vm name"
+                    ],
+                    "column_name": "VM ID",
+                    "column_order": 1
+                },
+                {
+                    "data_path": "action_result.summary.total_vms",
+                    "data_type": "numeric",
+                    "example_values": [
+                        8
+                    ]
+                },
+                {
+                    "data_path": "action_result.message",
+                    "data_type": "string",
+                    "example_values": [
+                        "Successfully retrieved VMs"
+                    ]
+                },
+                {
+                    "data_path": "summary.total_objects",
+                    "data_type": "numeric",
+                    "example_values": [
+                        1
+                    ]
+                },
+                {
+                    "data_path": "summary.total_objects_successful",
+                    "data_type": "numeric",
+                    "example_values": [
+                        1
+                    ]
+                }
+            ],
+            "render": {
+                "type": "table",
+                "title": "List VMs"
+            },
+            "versions": "EQ(*)"
+        },
+        {
             "action": "list submissions",
             "description": "List the submissions present on ThreatGrid based on the query provided",
+            "verbose": "ThreadGrid API returns a maximum of 10,000 results. Even if more than 10,000 results are present on the ThreadGrid server, a larger value for the 'limit' parameter will not return all of them.",
             "type": "investigate",
-            "identifier": "list submissions",
+            "identifier": "list_submissions",
             "read_only": true,
             "lock": {
                 "enabled": false
@@ -6942,23 +7118,23 @@
         "wheel": [
             {
                 "module": "certifi",
-                "input_file": "wheels/certifi-2021.10.8-py2.py3-none-any.whl"
+                "input_file": "wheels/py3/certifi-2022.5.18-py3-none-any.whl"
             },
             {
                 "module": "chardet",
-                "input_file": "wheels/chardet-3.0.4-py2.py3-none-any.whl"
+                "input_file": "wheels/shared/chardet-3.0.4-py2.py3-none-any.whl"
             },
             {
                 "module": "idna",
-                "input_file": "wheels/idna-2.10-py2.py3-none-any.whl"
+                "input_file": "wheels/shared/idna-2.10-py2.py3-none-any.whl"
             },
             {
                 "module": "requests",
-                "input_file": "wheels/requests-2.25.0-py2.py3-none-any.whl"
+                "input_file": "wheels/shared/requests-2.25.0-py2.py3-none-any.whl"
             },
             {
                 "module": "urllib3",
-                "input_file": "wheels/urllib3-1.26.8-py2.py3-none-any.whl"
+                "input_file": "wheels/shared/urllib3-1.26.9-py2.py3-none-any.whl"
             }
         ]
     }

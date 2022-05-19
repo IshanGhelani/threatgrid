@@ -13,9 +13,6 @@
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
 #
-#
-# Phantom imports
-# Other imports used by this connector
 import json
 import os
 import time
@@ -40,12 +37,13 @@ from traceback import format_exc
 
 class threatgridConnector(BaseConnector):
     # The actions supported by this connector
-    ACTION_ID_QUERY_FILE = "detonate file"
-    ACTION_ID_QUERY_URL = "detonate url"
-    ACTION_ID_GET_DETONATION_RESULTS = "get report"
+    ACTION_ID_QUERY_FILE = "detonate_file"
+    ACTION_ID_QUERY_URL = "detonate_url"
+    ACTION_ID_GET_DETONATION_RESULTS = "get_report"
     ACTION_ID_TEST_ASSET_CONNECTIVITY = 'test_asset_connectivity'
     ACTION_ID_LIST_PLAYBOOKS = "list_playbooks"
-    ACTION_ID_SEARCH_REPORT = "list submissions"
+    ACTION_ID_LIST_VMS = "list_vms"
+    ACTION_ID_SEARCH_REPORT = "list_submissions"
 
     def _mask_api_key_from_log(self, msg):
         """ This method is used to mask api in log for security purpose.
@@ -73,8 +71,7 @@ class threatgridConnector(BaseConnector):
                     error_code = THREATGRID_ERROR_CODE_UNAVAILABLE
                     error_msg = e.args[0]
         except Exception:
-            error_code = THREATGRID_ERROR_CODE_UNAVAILABLE
-            error_msg = THREATGRID_ERROR_MESSAGE_UNAVAILABLE
+            self.debug_print("Error occurred while fetching exception information")
 
         return "Error Code: {0}. Error Message: {1}".format(error_code, self._mask_api_key_from_log(error_msg))
 
@@ -84,7 +81,7 @@ class threatgridConnector(BaseConnector):
             base_uri=self.threatgrid_base_uri, api_key=self.threatgrid_api_key)
 
         try:
-            r = requests.get(url, verify=self.verify)  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
+            r = requests.get(url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
         except Exception as e:
             self.save_progress(THREATGRID_TEST_CONNECTIVITY_FAILED)
             return self.threatgrid_action_result.set_status(phantom.APP_ERROR,
@@ -115,7 +112,7 @@ class threatgridConnector(BaseConnector):
         return self.threatgrid_action_result.set_status(phantom.APP_SUCCESS)
 
     def _get_html_report(self, action_result, html_report_url, task_id):
-        r = requests.get(html_report_url, verify=self.verify)  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
+        r = requests.get(html_report_url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
         if not r.ok:  # pylint: disable=E1101
             error = 'Received http error code {}'.format(r.status_code)
             return action_result.set_status(phantom.APP_ERROR, error)
@@ -195,7 +192,7 @@ class threatgridConnector(BaseConnector):
         while True:
             error = None
             try:
-                r = requests.get(job_url, verify=self.verify)  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
+                r = requests.get(job_url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
             except requests.exceptions.ProxyError as err:
                 return self.threatgrid_action_result.set_status(phantom.APP_ERROR,
                     THREATGRID_REST_CALL_ERROR.format(self._get_error_message_from_exception(err)))
@@ -240,13 +237,11 @@ class threatgridConnector(BaseConnector):
             else:
                 report_url = ANALYSIS_URL.format(
                     base_uri=self.threatgrid_base_uri, task_id=task_id, api_key=self.threatgrid_api_key)
-                r2 = requests.get(  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                     report_url,
-                     verify=self.verify)
+                r2 = requests.get(report_url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
 
                 if r2.status_code != requests.codes.ok:  # pylint: disable=E1101
                     error = self._mask_api_key_from_log(
-                        'Query for report {!r} failed with status code {!d}'.format(report_url, r2.status_code))
+                        'Query for report {!r} failed with status code {}'.format(report_url, r2.status_code))
                     self.debug_print('Failed report text', r2.text)
                     self.threatgrid_action_result.set_status(
                         phantom.APP_ERROR, error)
@@ -256,9 +251,7 @@ class threatgridConnector(BaseConnector):
                     result_data[RESULT_REPORT_KEY] = obj
                     threat_url = THREAT_URL.format(
                         base_uri=self.threatgrid_base_uri, task_id=task_id, api_key=self.threatgrid_api_key)
-                    threat_info = requests.get(  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                        threat_url, verify=self.verify).json().get(
-                        RESPONSE_DATA_KEY)
+                    threat_info = requests.get(threat_url, verify=self.verify, timeout=DEFAULT_TIMEOUT).json().get(RESPONSE_DATA_KEY)
                     result_data[THREAT_KEY] = threat_info
                     error_dict = obj.get(RESPONSE_ERROR_KEY, {})
                 except Exception as e:
@@ -323,9 +316,7 @@ class threatgridConnector(BaseConnector):
     def _queue_analysis(self, data, files, key):
         url = SUBMIT_FILE.format(base_uri=self.threatgrid_base_uri)
         try:
-            r = requests.post(url,  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                data=data, files=files,
-                verify=self.verify)
+            r = requests.post(url, data=data, files=files, verify=self.verify, timeout=DEFAULT_TIMEOUT)
             r_json = r.json()
         except Exception as e:
             return self.threatgrid_action_result.set_status(phantom.APP_ERROR,
@@ -350,21 +341,20 @@ class threatgridConnector(BaseConnector):
                                      api_key=self.threatgrid_api_key,
                                      hash=hash)
         try:
-            r = requests.get(url,  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                verify=self.verify)
+            r = requests.get(url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
             obj = r.json()
         except Exception as e:
             return self.threatgrid_action_result.set_status(phantom.APP_ERROR,
                 THREATGRID_REST_CALL_ERROR.format(self._get_error_message_from_exception(e)))
         self.send_progress('Query returned {}.', r.status_code)
         for item in obj.get('data', {}).get('items', []):
-            task_id = item.get('sample')
+            task_id = item.get('item', {}).get('sample')
             if task_id:
                 return task_id
 
         return False
 
-    def _get_detonation_results(self, task_id, is_download_report=False):
+    def _get_report(self, task_id, is_download_report=False):
         results_url = RESULTS_URL.format(
             base_uri=self.threatgrid_base_uri, task_id=task_id)
         self._lookup_and_parse_results(task_id, is_download_report)
@@ -373,7 +363,7 @@ class threatgridConnector(BaseConnector):
             RESULTS_URL_KEY: results_url
         })
 
-    def _query_url(self, param):
+    def _detonate_url(self, param):
         sio = StringIO("[InternetShortcut]\nURL={}".format(param['url']))
         filename = 'sample.url'
 
@@ -382,25 +372,25 @@ class threatgridConnector(BaseConnector):
         }
         data = {
             'api_key': self.threatgrid_api_key,
-            'filename': filename,
-            'tags': [],
-            'os': '',
-            'osver': '',
-            'source': '',
+            'sample_filename': filename,
+            'tags': self._sanitize_list(param.get('tags', '')),
             'vm': param.get('vm', ''),
             'playbook': param.get('playbook', 'default')
         }
+        if param.get('vm_runtime'):
+            vm_runtime = self._validate_integer(self.threatgrid_action_result, param.get('vm_runtime'), "vm_runtime")
+            data['vm_runtime'] = vm_runtime
         if param.get('private'):
             data['private'] = True
         self._queue_analysis(data, files, param['url'])
 
-    def _query_file(self, param):
+    def _detonate_file(self, param):
         vault_id = param['vault_id']
 
         if param.get('force_analysis') is False:
             task_id = self._check_existing(vault_id)
             if task_id:
-                return self._get_detonation_results(task_id)
+                return self._get_report(task_id)
         filename = param.get('file_name')
         filename = filename if filename is not None else vault_id
 
@@ -422,26 +412,30 @@ class threatgridConnector(BaseConnector):
         }
         data = {
             'api_key': self.threatgrid_api_key,
-            'filename': filename,
-            'tags': [],
-            'os': '',
-            'osver': '',
-            'source': '',
+            'sample_filename': filename,
+            'tags': self._sanitize_list(param.get('tags', '')),
             'vm': param.get('vm', ''),
             'playbook': param.get('playbook', 'default'),
             'sample_password': param.get('sample_password')
         }
+        if param.get('vm_runtime'):
+            vm_runtime = self._validate_integer(self.threatgrid_action_result, param.get('vm_runtime'), "vm_runtime")
+            data['vm_runtime'] = vm_runtime
         if param.get('private'):
             data['private'] = True
 
         self._queue_analysis(data, files, filename)
 
+    def _sanitize_list(self, value):
+        to_list = [x.strip() for x in value.split(",")]
+        to_list = list(filter(None, to_list))
+        return ", ".join(to_list)
+
     def _list_playbooks(self):
         try:
             url = PLAYBOOKS_URL.format(base_uri=self.threatgrid_base_uri,
                                        api_key=self.threatgrid_api_key)
-            r = requests.get(url,  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                verify=self.verify)
+            r = requests.get(url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
             response = r.json().get(RESPONSE_DATA_KEY, {})
             error = r.json().get(RESPONSE_ERROR_KEY)
         except Exception as e:
@@ -455,6 +449,25 @@ class threatgridConnector(BaseConnector):
             self.threatgrid_action_result.set_status(phantom.APP_SUCCESS, 'Successfully retrieved playbooks')
             self.threatgrid_action_result.update_summary({
                 "Total Playbooks": len(response['playbooks'])
+            })
+
+    def _list_vms(self):
+        try:
+            url = VMS_URL.format(base_uri=self.threatgrid_base_uri, api_key=self.threatgrid_api_key)
+            r = requests.get(url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
+            response = r.json().get(RESPONSE_DATA_KEY, {})
+            error = r.json().get(RESPONSE_ERROR_KEY)
+        except Exception as e:
+            return self.threatgrid_action_result.set_status(phantom.APP_ERROR,
+                THREATGRID_REST_CALL_ERROR.format(self._get_error_message_from_exception(e)))
+        if r.status_code != requests.codes.ok or error:  # pylint: disable=E1101
+            self._response_status(error)
+        else:
+            for each_vm in response.get('vms', []):
+                self.threatgrid_action_result.add_data(each_vm)
+            self.threatgrid_action_result.set_status(phantom.APP_SUCCESS, 'Successfully retrieved VMs')
+            self.threatgrid_action_result.update_summary({
+                "total_vms": len(response.get('vms', []))
             })
 
     def _validate_integer(self, action_result, parameter, key, allow_zero=False):
@@ -489,7 +502,7 @@ class threatgridConnector(BaseConnector):
         self.threatgrid_action_result.set_status(
             phantom.APP_ERROR, message)
 
-    def _search_submissions(self, param):
+    def _list_submissions(self, param):
         query = param.get('query')
         limit = self._validate_integer(self.threatgrid_action_result, param.get('limit',
             DEFAULT_LIMIT), "limit", allow_zero=False)
@@ -501,9 +514,7 @@ class threatgridConnector(BaseConnector):
         if query:
             search_report_url += '&q={query}'.format(query=query)
         try:
-            r = requests.get(  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                search_report_url,
-                verify=self.verify)
+            r = requests.get(search_report_url, verify=self.verify, timeout=DEFAULT_TIMEOUT)
             r_json = r.json()
             response = r_json.get(RESPONSE_DATA_KEY, {})
             error = r_json.get(RESPONSE_ERROR_KEY)
@@ -537,17 +548,19 @@ class threatgridConnector(BaseConnector):
 
         try:
             if action == self.ACTION_ID_QUERY_FILE:
-                self._query_file(param)
+                self._detonate_file(param)
             elif action == self.ACTION_ID_QUERY_URL:
-                self._query_url(param)
+                self._detonate_url(param)
             elif action == self.ACTION_ID_GET_DETONATION_RESULTS:
-                self._get_detonation_results(param[TASK_ID_KEY], param.get('download_report', False))
+                self._get_report(param[TASK_ID_KEY], param.get('download_report', False))
             elif action == self.ACTION_ID_TEST_ASSET_CONNECTIVITY:
                 self._test_asset_connectivity()
             elif action == self.ACTION_ID_LIST_PLAYBOOKS:
                 self._list_playbooks()
+            elif action == self.ACTION_ID_LIST_VMS:
+                self._list_vms()
             elif action == self.ACTION_ID_SEARCH_REPORT:
-                self._search_submissions(param)
+                self._list_submissions(param)
             else:
                 raise ValueError('action %r is not supported' % action)
         except Exception as e:
@@ -590,9 +603,7 @@ if __name__ == '__main__':
         try:
             print("Accessing the Login page")
             login_url = BaseConnector._get_phantom_base_url() + "login"
-            r = requests.get(  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                login_url,
-                verify=verify)
+            r = requests.get(login_url, verify=verify, timeout=DEFAULT_TIMEOUT)
             csrftoken = r.cookies['csrftoken']
 
             data = dict()
@@ -605,10 +616,7 @@ if __name__ == '__main__':
             headers['Referer'] = login_url
 
             print("Logging into Platform to get the session id")
-            r2 = requests.post(  # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
-                 login_url,
-                 verify=verify,
-                 data=data, headers=headers)
+            r2 = requests.post(login_url, verify=verify, data=data, headers=headers, timeout=DEFAULT_TIMEOUT)
             session_id = r2.cookies['sessionid']
         except Exception as e:
             print("Unable to get session id from the platfrom. Error: " + str(e))
